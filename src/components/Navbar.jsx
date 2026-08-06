@@ -6,7 +6,7 @@ import { useCart } from '../context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navbar() {
-  const { user, logout, login, signup, isOpen, setIsOpen, mode, setMode } = useAuthModal();
+  const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode } = useAuthModal();
   const { cartCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,11 +46,10 @@ export default function Navbar() {
   }, [isOpen, mode]);
 
   const openLoginDrawer = () => {
-    setMode('login');
-    setIsOpen(true);
+    openLogin();
   };
 
-  const closeLoginDrawer = () => setIsOpen(false);
+  const closeLoginDrawer = () => close();
 
   const handlePhoneSubmit = (e) => {
     e.preventDefault();
