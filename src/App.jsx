@@ -23,9 +23,11 @@ import Settings from './pages/Settings';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminRestaurants from './pages/admin/AdminRestaurants';
 import AdminOrders from './pages/admin/AdminOrders';
+import AdminUsers from './pages/admin/AdminUsers';
 import TrackOrder from './pages/TrackOrder';
 import Partner from './pages/Partner';
 import PartnerDashboard from './pages/PartnerDashboard';
+import NotFound from './pages/NotFound';
 import ScrollToTop from './utils/ScrollToTop';
 import { AuthModalProvider } from './context/AuthModalContext';
 import { CartProvider } from './context/CartContext';
@@ -37,7 +39,6 @@ function App() {
       <CartProvider>
         <BrowserRouter>
           <ScrollToTop />
-          <AuthModal />
           <Routes>
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Home />} />
@@ -63,9 +64,11 @@ function App() {
               <Route path="admin" element={<AdminDashboard />} />
               <Route path="admin/restaurants" element={<AdminRestaurants />} />
               <Route path="admin/orders" element={<AdminOrders />} />
+              <Route path="admin/users" element={<AdminUsers />} />
               <Route path="track-order/:orderId" element={<TrackOrder />} />
               <Route path="partner" element={<Partner />} />
               <Route path="partner/dashboard" element={<PartnerDashboard />} />
+              <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
         </BrowserRouter>

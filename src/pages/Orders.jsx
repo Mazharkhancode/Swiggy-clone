@@ -4,7 +4,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import { useCart } from '../context/CartContext';
 import DashboardSidebar from '../components/DashboardSidebar';
 import { restaurants } from '../data/restaurants';
-import { ShoppingBag, Receipt, ArrowRight, Printer, X, Check, Landmark, RefreshCw } from 'lucide-react';
+import { ShoppingBag, Receipt, ArrowRight, Printer, X, Check, Landmark, RefreshCw, MapPin, Navigation } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Orders() {
@@ -87,9 +87,18 @@ export default function Orders() {
                           <span className="text-xs bg-orange-50 text-[#ff5200] border border-orange-100 font-black px-2.5 py-0.5 rounded uppercase">
                             {order.restaurantName}
                           </span>
-                          <span className="text-[10px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            order.status === 'Delivered'
+                              ? 'bg-green-50 text-green-600'
+                              : 'bg-orange-50 text-[#ff5200] animate-pulse'
+                          }`}>
                             <Check size={10} /> {order.status}
                           </span>
+                          {order.status !== 'Delivered' && (
+                            <span className="text-[9px] bg-red-500 text-white font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping inline-block"></span> LIVE
+                            </span>
+                          )}
                         </div>
                         
                         <p className="text-xs text-gray-400 font-semibold">
@@ -118,9 +127,13 @@ export default function Orders() {
                         <div className="flex gap-2">
                           <Link
                             to={`/track-order/${order.id}`}
-                            className="flex items-center gap-1.5 border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-white"
+                            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              order.status !== 'Delivered'
+                                ? 'bg-[#ff5200] text-white hover:bg-[#e64a00] shadow-sm shadow-orange-200'
+                                : 'border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 bg-white'
+                            }`}
                           >
-                            Track
+                            <Navigation size={12} /> Track
                           </Link>
                           <button
                             onClick={() => setActiveInvoice(order)}

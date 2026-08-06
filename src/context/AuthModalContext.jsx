@@ -184,7 +184,7 @@ export function AuthModalProvider({ children }) {
     const newOrder = {
       id: order.orderId || `SW-${Math.floor(10000000 + Math.random() * 90000000)}`,
       date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      status: 'Delivered',
+      status: 'Confirmed',
       ...order
     };
     const updated = {
