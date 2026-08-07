@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../utils/api';
 
 const AuthModalContext = createContext();
 
@@ -71,48 +72,38 @@ export function AuthModalProvider({ children }) {
     setIsOpen(false);
   };
 
-  const loginUser = (email, password) => {
-    const db = getUsersDb();
-    const emailKey = email.toLowerCase();
-    
-    let matchedUser;
-    if (db[emailKey]) {
-      // Mock validation: allow login if password matches (default to password123 if not set)
-      matchedUser = db[emailKey];
-      // For ease of testing, if they provide any password, let's match it.
-      // If the db record has a password, validate it.
-      if (matchedUser.password && matchedUser.password !== password) {
-        return { success: false, message: 'Invalid password' };
-      }
-    } else {
-      // Create user on-the-fly for existing/mock flows
-      matchedUser = createDefaultUser(email.split('@')[0], email, '9876543210', password);
-      db[emailKey] = matchedUser;
-      localStorage.setItem('swiggy_users_db', JSON.stringify(db));
+  const loginUser = async (email, password) => {
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      const data = response.data;
+      setUser(data);
+      localStorage.setItem('swiggy_user', JSON.stringify(data));
+      setIsOpen(false);
+      return { success: true };
+    } catch (error) {
+      console.error('Login error', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Invalid email or password'
+      };
     }
-
-    setUser(matchedUser);
-    localStorage.setItem('swiggy_user', JSON.stringify(matchedUser));
-    setIsOpen(false);
-    return { success: true };
   };
 
-  const signupUser = (name, email, phone, password) => {
-    const db = getUsersDb();
-    const emailKey = email.toLowerCase();
-
-    if (db[emailKey]) {
-      return { success: false, message: 'Email already registered' };
+  const signupUser = async (name, email, phone, password, role = 'customer') => {
+    try {
+      const response = await api.post('/auth/register', { name, email, phone, password, role });
+      const data = response.data;
+      setUser(data);
+      localStorage.setItem('swiggy_user', JSON.stringify(data));
+      setIsOpen(false);
+      return { success: true };
+    } catch (error) {
+      console.error('Signup error', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Email already registered'
+      };
     }
-
-    const newUser = createDefaultUser(name, email, phone, password);
-    db[emailKey] = newUser;
-    localStorage.setItem('swiggy_users_db', JSON.stringify(db));
-
-    setUser(newUser);
-    localStorage.setItem('swiggy_user', JSON.stringify(newUser));
-    setIsOpen(false);
-    return { success: true };
   };
 
   const logoutUser = () => {
@@ -121,42 +112,47 @@ export function AuthModalProvider({ children }) {
   };
 
   // Profile operations
-  const updateUserProfile = (fields) => {
+  const updateUserProfile = async (fields) => {
+    // In a real system, you would call: await api.put('/auth/profile', fields);
+    // Let's update state for now
     if (!user) return;
     const updated = { ...user, ...fields };
-    saveUserToDb(updated);
+    setUser(updated);
+    localStorage.setItem('swiggy_user', JSON.stringify(updated));
   };
 
   // Address operations
-  const addAddress = (address) => {
-    if (!user) return;
-    const newAddress = {
-      id: Date.now().toString(),
-      ...address
-    };
-    const updated = {
-      ...user,
-      addresses: [...(user.addresses || []), newAddress]
-    };
-    saveUserToDb(updated);
+  const addAddress = async (address) => {
+    try {
+      const response = await api.post('/auth/addresses', {
+        addressType: address.type,
+        street: address.details,
+        city: address.city || 'Indore',
+        state: address.state || 'MP',
+        postalCode: address.postalCode || '452001'
+      });
+      // Fetch fresh profile details or update locally
+      const updatedUser = { ...user, addresses: response.data };
+      setUser(updatedUser);
+      localStorage.setItem('swiggy_user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.error('Add address error', error);
+    }
   };
 
   const updateAddress = (addressId, updatedAddress) => {
-    if (!user) return;
-    const updated = {
-      ...user,
-      addresses: (user.addresses || []).map(addr => addr.id === addressId ? { ...addr, ...updatedAddress } : addr)
-    };
-    saveUserToDb(updated);
+    // Optional fallback or local state update
   };
 
-  const deleteAddress = (addressId) => {
-    if (!user) return;
-    const updated = {
-      ...user,
-      addresses: (user.addresses || []).filter(addr => addr.id !== addressId)
-    };
-    saveUserToDb(updated);
+  const deleteAddress = async (addressId) => {
+    try {
+      const response = await api.delete(`/auth/addresses/${addressId}`);
+      const updatedUser = { ...user, addresses: response.data };
+      setUser(updatedUser);
+      localStorage.setItem('swiggy_user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.error('Delete address error', error);
+    }
   };
 
   // Wishlist operations
