@@ -1,7 +1,8 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, Clock, MapPin, Phone, ChevronLeft, Search, Plus, Minus, ShoppingCart, ChevronDown, Heart } from 'lucide-react';
+import api from '../utils/api';
 import { restaurants } from '../data/restaurants';
 import { useCart } from '../context/CartContext';
 import { useAuthModal } from '../context/AuthModalContext';
@@ -9,10 +10,81 @@ import { useAuthModal } from '../context/AuthModalContext';
 export default function RestaurantDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const restaurant = restaurants.find(r => r.id === id);
+  const [restaurant, setRestaurant] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const { cartItems, addToCart, removeFromCart, replaceCartPrompt, confirmReplaceCart, cancelReplaceCart, cartCount } = useCart();
   const { user, toggleWishlist } = useAuthModal();
+
+  useEffect(() => {
+    const fetchRestaurantDetails = async () => {
+      try {
+        setLoading(true);
+        // Attempt to fetch from database
+        const response = await api.get(`/restaurants/${id}`);
+        if (response.data && response.data.restaurant) {
+          const resData = response.data;
+          
+          // Group flat menu items by category for frontend UI compatibility
+          const groupedMenu = [];
+          const categories = [];
+
+          if (resData.menu && Array.isArray(resData.menu)) {
+            resData.menu.forEach(item => {
+              let catObj = groupedMenu.find(g => g.category === item.category);
+              if (!catObj) {
+                catObj = { category: item.category, items: [] };
+                groupedMenu.push(catObj);
+                categories.push(item.category);
+              }
+              catObj.items.push({
+                id: item._id,
+                name: item.name,
+                desc: item.description || '',
+                price: item.price,
+                rating: 4.5,
+                veg: item.isVeg,
+                image: item.image,
+                variants: [],
+                addons: []
+              });
+            });
+          }
+
+          const normalizedRestaurant = {
+            id: resData.restaurant._id,
+            name: resData.restaurant.name,
+            cuisine: Array.isArray(resData.restaurant.cuisine) ? resData.restaurant.cuisine.join(', ') : resData.restaurant.cuisine,
+            rating: resData.restaurant.rating || 4.5,
+            time: `${resData.restaurant.deliveryTime || 30} mins`,
+            dist: '2.5 KM',
+            deliveryFee: 0,
+            address: `${resData.restaurant.address.street}, ${resData.restaurant.address.city}`,
+            hours: '11:00 AM – 11:00 PM',
+            image: resData.restaurant.image,
+            offer: resData.restaurant.costForTwo ? `₹${resData.restaurant.costForTwo} For Two` : '10% OFF',
+            categories: categories,
+            menu: groupedMenu,
+            reviews: []
+          };
+          
+          setRestaurant(normalizedRestaurant);
+        } else {
+          // Fallback to static if no restaurant returned
+          const staticMatch = restaurants.find(r => r.id === id);
+          setRestaurant(staticMatch);
+        }
+      } catch (err) {
+        console.error('Error fetching restaurant details, falling back to static data', err);
+        const staticMatch = restaurants.find(r => r.id === id);
+        setRestaurant(staticMatch);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRestaurantDetails();
+  }, [id]);
 
   const cartLookup = useMemo(() => {
     const lookup = {};
@@ -26,6 +98,14 @@ export default function RestaurantDetails() {
   const [menuSearch, setMenuSearch] = useState('');
   const [showReviews, setShowReviews] = useState(false);
   const sectionRefs = useRef([]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (

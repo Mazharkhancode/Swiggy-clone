@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import api from '../utils/api';
 
-import { restaurants } from '../data/restaurants';
+import { restaurants as staticRestaurants } from '../data/restaurants';
 
 // Helper to normalize strings for robust fuzzy-like matching (handles double letters, common typos)
 const normalizeStr = (str) => {
@@ -17,10 +19,47 @@ const normalizeStr = (str) => {
 };
 
 export default function PopularRestaurants({ searchQuery = '' }) {
+  const [restaurantsList, setRestaurantsList] = useState(staticRestaurants);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const response = await api.get('/restaurants');
+        if (response.data && response.data.length > 0) {
+          const dbItems = response.data.map(item => ({
+            id: item._id,
+            name: item.name,
+            cuisine: Array.isArray(item.cuisine) ? item.cuisine.join(', ') : item.cuisine,
+            rating: item.rating || 4.5,
+            time: `${item.deliveryTime || 30} mins`,
+            dist: '2.5 KM',
+            offer: item.costForTwo ? `₹${item.costForTwo} For Two` : '10% OFF',
+            image: item.image,
+            tags: item.cuisine || [],
+            isDb: true
+          }));
+
+          const filteredStatic = staticRestaurants.filter(
+            s => !dbItems.some(d => d.name.toLowerCase() === s.name.toLowerCase())
+          );
+
+          setRestaurantsList([...dbItems, ...filteredStatic]);
+        }
+      } catch (err) {
+        console.error('Error fetching restaurants from backend', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRestaurants();
+  }, []);
+
   const query = searchQuery.trim();
   const normalizedQuery = normalizeStr(query);
 
-  const filteredRestaurants = restaurants.filter(rest => {
+  const filteredRestaurants = restaurantsList.filter(rest => {
     if (!query) return true;
     
     // If the query is a generic term (like restaurant, food, eat, order, or common typos), match all

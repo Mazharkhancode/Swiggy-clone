@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Star, Clock, MapPin, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
-import { restaurants } from '../data/restaurants';
+import api from '../utils/api';
+import { restaurants as staticRestaurants } from '../data/restaurants';
 
 const SORT_OPTIONS = [
   { label: 'Popularity', key: 'popularity' },
@@ -16,6 +17,7 @@ const CUISINE_FILTERS = ['All', 'North Indian', 'Biryani', 'Fast Food', 'Bakery'
 const RATING_FILTERS = ['All', '4.0+', '4.5+'];
 
 export default function Restaurants() {
+  const [restaurantsList, setRestaurantsList] = useState(staticRestaurants);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState('popularity');
   const [selectedCuisine, setSelectedCuisine] = useState('All');
@@ -24,8 +26,41 @@ export default function Restaurants() {
   const [freeDelivery, setFreeDelivery] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const response = await api.get('/restaurants');
+        if (response.data && response.data.length > 0) {
+          const dbItems = response.data.map(item => ({
+            id: item._id,
+            name: item.name,
+            cuisine: Array.isArray(item.cuisine) ? item.cuisine.join(', ') : item.cuisine,
+            rating: item.rating || 4.5,
+            time: `${item.deliveryTime || 30} mins`,
+            dist: '2.5 KM',
+            offer: item.costForTwo ? `₹${item.costForTwo} For Two` : '10% OFF',
+            image: item.image,
+            tags: item.cuisine || [],
+            minOrder: item.costForTwo ? Math.round(item.costForTwo / 2) : 150,
+            deliveryFee: 0,
+            isDb: true
+          }));
+
+          const filteredStatic = staticRestaurants.filter(
+            s => !dbItems.some(d => d.name.toLowerCase() === s.name.toLowerCase())
+          );
+
+          setRestaurantsList([...dbItems, ...filteredStatic]);
+        }
+      } catch (err) {
+        console.error('Error fetching restaurants', err);
+      }
+    };
+    fetchRestaurants();
+  }, []);
+
   const filtered = useMemo(() => {
-    let list = [...restaurants];
+    let list = [...restaurantsList];
 
     // Search
     if (query.trim()) {
@@ -33,7 +68,7 @@ export default function Restaurants() {
       list = list.filter(r =>
         r.name.toLowerCase().includes(q) ||
         r.cuisine.toLowerCase().includes(q) ||
-        r.tags.some(t => t.includes(q))
+        (r.tags && r.tags.some(t => t.toLowerCase().includes(q)))
       );
     }
 
@@ -51,7 +86,7 @@ export default function Restaurants() {
     // Veg only
     if (vegOnly) {
       list = list.filter(r =>
-        r.menu.every(sec => sec.items.every(item => item.veg))
+        !r.menu || r.menu.every(sec => sec.items.every(item => item.veg))
       );
     }
 
@@ -70,7 +105,7 @@ export default function Restaurants() {
     });
 
     return list;
-  }, [query, sortKey, selectedCuisine, selectedRating, vegOnly, freeDelivery]);
+  }, [restaurantsList, query, sortKey, selectedCuisine, selectedRating, vegOnly, freeDelivery]);
 
   const FilterPanel = () => (
     <div className="space-y-6">
