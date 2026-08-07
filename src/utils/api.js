@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'https://swiggy-clone-x5a7.onrender.com/api',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -11,17 +11,18 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const user = localStorage.getItem('swiggy_user');
+
     if (user) {
       const parsedUser = JSON.parse(user);
-      if (parsedUser && parsedUser.token) {
+
+      if (parsedUser?.token) {
         config.headers.Authorization = `Bearer ${parsedUser.token}`;
       }
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export default api;
