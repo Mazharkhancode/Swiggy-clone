@@ -2,30 +2,39 @@ const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
 
-const keyPath = path.join(__dirname, '../firebaseServiceAccountKey.json');
+const localKeyPath = path.join(__dirname, '../firebaseServiceAccountKey.json');
+const renderKeyPath = '/etc/secrets/firebaseServiceAccountKey.json';
+
 let firebaseInitialized = false;
 
-if (fs.existsSync(keyPath)) {
-  try {
-    const serviceAccount = require(keyPath);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log('Firebase Admin SDK Initialized Successfully.');
-    firebaseInitialized = true;
-  } catch (error) {
-    console.error('Error initializing Firebase Admin SDK:', error.message);
+try {
+  let serviceAccount;
+
+  if (fs.existsSync(renderKeyPath)) {
+    console.log('Using Firebase key from Render Secret Files...');
+    serviceAccount = require(renderKeyPath);
+  } else if (fs.existsSync(localKeyPath)) {
+    console.log('Using local Firebase key...');
+    serviceAccount = require(localKeyPath);
+  } else {
+    throw new Error('Firebase Service Account Key not found.');
   }
-} else {
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+
+  console.log('Firebase Admin SDK Initialized Successfully.');
+  firebaseInitialized = true;
+
+} catch (error) {
   console.warn('\n============================================================');
-  console.warn('WARNING: firebaseServiceAccountKey.json is missing in backend/');
-  console.warn('Firebase Phone Auth token verification will not function.');
-  console.warn('Please download your Service Account JSON key from Firebase Console');
-  console.warn('and save it as: backend/firebaseServiceAccountKey.json');
+  console.warn('WARNING: Firebase Admin SDK not initialized.');
+  console.warn(error.message);
   console.warn('============================================================\n');
 }
 
 module.exports = {
   admin,
-  firebaseInitialized
+  firebaseInitialized,
 };
