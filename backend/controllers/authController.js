@@ -306,7 +306,7 @@ const verifyEmailOTP = async (req, res) => {
 // @route   POST /api/auth/firebase-phone-login
 // @access  Public
 const verifyFirebaseToken = async (req, res) => {
-  const { firebaseToken } = req.body;
+  const { firebaseToken, name, email } = req.body;
 
   if (!firebaseToken) {
     return res.status(400).json({ message: 'Firebase token is required' });
@@ -332,8 +332,8 @@ const verifyFirebaseToken = async (req, res) => {
     if (!user) {
       // Register new user with this phone
       user = await User.create({
-        name: `User-${phone.slice(-4)}`,
-        email: `${phone.replace('+', '')}@swiggy.com`,
+        name: name || `User-${phone.slice(-4)}`,
+        email: email || `${phone.replace('+', '')}@swiggy.com`,
         password: `fb_${Date.now()}`,
         role: 'customer',
         phone

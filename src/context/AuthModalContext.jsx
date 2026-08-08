@@ -243,6 +243,27 @@ export function AuthModalProvider({ children }) {
     }
   };
 
+  const loginWithFirebaseToken = async (firebaseToken, extraData = {}) => {
+    try {
+      const response = await api.post('/auth/firebase-phone-login', {
+        firebaseToken,
+        name: extraData.name,
+        email: extraData.email
+      });
+      const data = response.data;
+      setUser(data);
+      localStorage.setItem('swiggy_user', JSON.stringify(data));
+      setIsOpen(false);
+      return { success: true };
+    } catch (error) {
+      console.error('Firebase token verification error', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Firebase OTP login failed'
+      };
+    }
+  };
+
   return (
     <AuthModalContext.Provider
       value={{
@@ -265,7 +286,8 @@ export function AuthModalProvider({ children }) {
         updateUserSettings,
         changePassword,
         sendOTPCode,
-        verifyOTPCode
+        verifyOTPCode,
+        loginWithFirebaseToken
       }}
     >
       {children}

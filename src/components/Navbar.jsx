@@ -4,9 +4,11 @@ import { LogOut, User, ChevronDown, LayoutDashboard, ShoppingBag, Heart, MapPin,
 import { useAuthModal } from '../context/AuthModalContext';
 import { useCart } from '../context/CartContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { auth } from '../config/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 export default function Navbar() {
-  const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode } = useAuthModal();
+  const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode, loginWithFirebaseToken } = useAuthModal();
   const { cartCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,6 +31,10 @@ export default function Navbar() {
   const [signupPassword, setSignupPassword] = useState('');
   const [tempSignupData, setTempSignupData] = useState(null);
 
+  // Firebase Phone Auth State
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   // Sync context mode with drawer mode
   useEffect(() => {
     if (isOpen) {
@@ -42,6 +48,8 @@ export default function Navbar() {
       setSignupPassword('');
       setMatchedUserObj(null);
       setTempSignupData(null);
+      setConfirmationResult(null);
+      setLoading(false);
     }
   }, [isOpen, mode]);
 
@@ -51,38 +59,35 @@ export default function Navbar() {
 
   const closeLoginDrawer = () => close();
 
-  const handlePhoneSubmit = (e) => {
+  const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
     if (!authPhone || authPhone.length < 10) {
       setAuthError('Please enter a valid 10-digit phone number.');
       return;
     }
-    
-    // Check if user exists with this phone number in swiggy_users_db
-    const db = JSON.parse(localStorage.getItem('swiggy_users_db') || '{}');
-    const matchedUser = Object.values(db).find(u => u.phone === authPhone);
-    
-    if (matchedUser) {
-      setMatchedUserObj(matchedUser);
-      setDrawerMode('login');
+
+    setLoading(true);
+    const formattedPhone = `+91${authPhone}`;
+
+    try {
+      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible'
+      });
+
+      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
+      setConfirmationResult(confirmation);
       setDrawerStep('otp');
       setAuthOtp('');
-      // Show simulated OTP trigger notice
-      setTimeout(() => {
-        alert(`Psst! Swiggy OTP simulation for ${authPhone} is: 123456`);
-      }, 300);
-    } else {
-      // Unregistered user -> go to Signup mode directly with phone pre-filled
-      setSignupName('');
-      setSignupEmail('');
-      setSignupPassword('');
-      setDrawerMode('signup');
-      setAuthError('Mobile number is not registered. Please fill in details below to sign up.');
+    } catch (error) {
+      console.error('Error during signInWithPhoneNumber', error);
+      setAuthError(error.message || 'Failed to send OTP. Please check your config or network.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDrawerSignupSubmit = (e) => {
+  const handleDrawerSignupSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
     if (!signupName || !signupEmail || !authPhone || !signupPassword) {
@@ -99,45 +104,71 @@ export default function Navbar() {
       return;
     }
     
+    setLoading(true);
     setTempSignupData({
       name: signupName,
       email: signupEmail,
       phone: authPhone,
       password: signupPassword
     });
-    setDrawerStep('otp');
-    setAuthOtp('');
-    setTimeout(() => {
-      alert(`Psst! Swiggy OTP simulation for ${authPhone} is: 123456`);
-    }, 300);
+
+    const formattedPhone = `+91${authPhone}`;
+
+    try {
+      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible'
+      });
+
+      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
+      setConfirmationResult(confirmation);
+      setDrawerStep('otp');
+      setAuthOtp('');
+    } catch (error) {
+      console.error('Error during signup signInWithPhoneNumber', error);
+      setAuthError(error.message || 'Failed to send OTP. Please check your config or network.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOtpVerify = (e) => {
+  const handleOtpVerify = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (authOtp !== '123456') {
-      setAuthError('Incorrect OTP. Please enter 123456.');
+    if (!authOtp || authOtp.length !== 6) {
+      setAuthError('Please enter a valid 6-digit OTP.');
       return;
     }
-    
-    if (drawerMode === 'login') {
-      if (matchedUserObj) {
-        const result = login(matchedUserObj.email, matchedUserObj.password);
-        if (result.success) {
-          closeLoginDrawer();
-        } else {
-          setAuthError('Login failed.');
-        }
+
+    setLoading(true);
+
+    try {
+      if (!confirmationResult) {
+        throw new Error('No active OTP session found. Please request a new code.');
       }
-    } else {
-      if (tempSignupData) {
-        const result = signup(tempSignupData.name, tempSignupData.email, tempSignupData.phone, tempSignupData.password);
-        if (result.success) {
-          closeLoginDrawer();
-        } else {
-          setAuthError(result.message || 'Signup failed.');
-        }
+
+      const userCredential = await confirmationResult.confirm(authOtp);
+      const firebaseToken = await userCredential.user.getIdToken();
+
+      let result;
+      if (drawerMode === 'signup' && tempSignupData) {
+        result = await loginWithFirebaseToken(firebaseToken, {
+          name: tempSignupData.name,
+          email: tempSignupData.email
+        });
+      } else {
+        result = await loginWithFirebaseToken(firebaseToken);
       }
+
+      if (result.success) {
+        closeLoginDrawer();
+      } else {
+        setAuthError(result.message || 'Verification failed.');
+      }
+    } catch (error) {
+      console.error('Error verifying OTP code', error);
+      setAuthError(error.message || 'Invalid or expired OTP. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -232,6 +263,9 @@ export default function Navbar() {
                 <X size={22} />
               </button>
 
+              {/* Invisible Recaptcha Container */}
+              <div id="recaptcha-container"></div>
+
               {/* Drawer Content */}
               <div className="flex-1 overflow-y-auto px-10 pt-16 pb-8">
                 
@@ -298,10 +332,11 @@ export default function Navbar() {
                         {/* Submit Button */}
                         <button
                           type="submit"
-                          className="w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0"
+                          disabled={loading}
+                          className={`w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                         >
-                          LOGIN
-                          <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                          {loading ? 'SENDING...' : 'LOGIN'}
+                          {!loading && <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />}
                         </button>
                       </form>
                     ) : (
@@ -382,9 +417,10 @@ export default function Navbar() {
                       {/* Signup Button */}
                       <button
                         type="submit"
-                        className="w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0"
+                        disabled={loading}
+                        className={`w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                       >
-                        SIGN UP &rarr;
+                        {loading ? 'SENDING...' : 'SIGN UP \u2192'}
                       </button>
                     </form>
                   )}
@@ -404,11 +440,7 @@ export default function Navbar() {
                       </div>
                     </div>
 
-                    {/* Simulation Notification */}
-                    <div className="bg-emerald-50 text-emerald-800 rounded-xl p-4 border border-emerald-100 text-xs font-bold mb-5 flex flex-col gap-1">
-                      <span>📱 Simulated SMS OTP successfully sent!</span>
-                      <span className="font-extrabold text-[#ff5200] text-[13px]">Please enter: 123456</span>
-                    </div>
+
 
                     {/* Error */}
                     {authError && (
@@ -441,10 +473,11 @@ export default function Navbar() {
                       {/* Verify Button */}
                       <button
                         type="submit"
-                        className="w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0"
+                        disabled={loading}
+                        className={`w-full bg-[#ff5200] hover:bg-[#e64a00] text-white py-4 rounded-md font-black text-[14px] uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group cursor-pointer border-0 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                       >
-                        VERIFY OTP
-                        <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                        {loading ? 'VERIFYING...' : 'VERIFY OTP'}
+                        {!loading && <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />}
                       </button>
 
                       <button
