@@ -7,6 +7,30 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../config/firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
+const formatToE164 = (phone) => {
+  if (!phone) return '';
+  // Remove all non-numeric characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If it already starts with + and has country code, return it as is
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  
+  // If it starts with 91 and has 12 digits, prepend +
+  if (cleaned.startsWith('91') && cleaned.length === 12) {
+    return `+${cleaned}`;
+  }
+  
+  // If it has 10 digits (national number), prepend +91
+  if (cleaned.length === 10) {
+    return `+91${cleaned}`;
+  }
+  
+  // Fallback: if it's already a full number, return with +
+  return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
+};
+
 export default function Navbar() {
   const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode, loginWithFirebaseToken } = useAuthModal();
   const { cartCount } = useCart();
@@ -66,13 +90,14 @@ export default function Navbar() {
       setAuthError('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
       return;
     }
-    if (!authPhone || authPhone.length < 10) {
-      setAuthError('Please enter a valid 10-digit phone number.');
+    const cleanedDigits = authPhone.replace(/\D/g, '');
+    if (cleanedDigits.length < 10) {
+      setAuthError('Please enter a valid phone number (at least 10 digits).');
       return;
     }
 
     setLoading(true);
-    const formattedPhone = `+91${authPhone}`;
+    const formattedPhone = formatToE164(authPhone);
 
     try {
       const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
@@ -107,8 +132,9 @@ export default function Navbar() {
       setAuthError('Please enter a valid email address.');
       return;
     }
-    if (authPhone.length < 10) {
-      setAuthError('Please enter a valid phone number.');
+    const cleanedDigits = authPhone.replace(/\D/g, '');
+    if (cleanedDigits.length < 10) {
+      setAuthError('Please enter a valid phone number (at least 10 digits).');
       return;
     }
     
@@ -120,7 +146,7 @@ export default function Navbar() {
       password: signupPassword
     });
 
-    const formattedPhone = `+91${authPhone}`;
+    const formattedPhone = formatToE164(authPhone);
 
     try {
       const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
