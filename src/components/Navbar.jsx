@@ -62,6 +62,10 @@ export default function Navbar() {
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
+    if (!auth) {
+      setAuthError('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
+      return;
+    }
     if (!authPhone || authPhone.length < 10) {
       setAuthError('Please enter a valid 10-digit phone number.');
       return;
@@ -90,6 +94,10 @@ export default function Navbar() {
   const handleDrawerSignupSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
+    if (!auth) {
+      setAuthError('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
+      return;
+    }
     if (!signupName || !signupEmail || !authPhone || !signupPassword) {
       setAuthError('Please fill in all fields.');
       return;
