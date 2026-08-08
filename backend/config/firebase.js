@@ -2,7 +2,11 @@ const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
 
-const localKeyPath = path.join(__dirname, '../firebaseServiceAccountKey.json');
+const localKeyPath = path.join(
+  __dirname,
+  '../firebaseServiceAccountKey.json'
+);
+
 const renderKeyPath = '/etc/secrets/firebaseServiceAccountKey.json';
 
 let firebaseInitialized = false;
@@ -12,10 +16,18 @@ try {
 
   if (fs.existsSync(renderKeyPath)) {
     console.log('Using Firebase key from Render Secret Files...');
-    serviceAccount = require(renderKeyPath);
+
+    serviceAccount = JSON.parse(
+      fs.readFileSync(renderKeyPath, 'utf8')
+    );
+
   } else if (fs.existsSync(localKeyPath)) {
     console.log('Using local Firebase key...');
-    serviceAccount = require(localKeyPath);
+
+    serviceAccount = JSON.parse(
+      fs.readFileSync(localKeyPath, 'utf8')
+    );
+
   } else {
     throw new Error('Firebase Service Account Key not found.');
   }
