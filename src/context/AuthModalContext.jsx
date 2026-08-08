@@ -213,6 +213,36 @@ export function AuthModalProvider({ children }) {
     return { success: true };
   };
 
+  const sendOTPCode = async (phone) => {
+    try {
+      const response = await api.post('/auth/send-otp', { phone });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      console.error('Send OTP error', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to send OTP'
+      };
+    }
+  };
+
+  const verifyOTPCode = async (phone, otp) => {
+    try {
+      const response = await api.post('/auth/verify-otp', { phone, otp });
+      const data = response.data;
+      setUser(data);
+      localStorage.setItem('swiggy_user', JSON.stringify(data));
+      setIsOpen(false);
+      return { success: true };
+    } catch (error) {
+      console.error('Verify OTP error', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Invalid or expired OTP'
+      };
+    }
+  };
+
   return (
     <AuthModalContext.Provider
       value={{
@@ -233,7 +263,9 @@ export function AuthModalProvider({ children }) {
         toggleWishlist,
         addOrder,
         updateUserSettings,
-        changePassword
+        changePassword,
+        sendOTPCode,
+        verifyOTPCode
       }}
     >
       {children}

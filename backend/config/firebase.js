@@ -1,6 +1,8 @@
-const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
+
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
 const localKeyPath = path.join(
   __dirname,
@@ -10,6 +12,7 @@ const localKeyPath = path.join(
 const renderKeyPath = '/etc/secrets/firebaseServiceAccountKey.json';
 
 let firebaseInitialized = false;
+let authInstance = null;
 
 try {
   let serviceAccount;
@@ -32,11 +35,14 @@ try {
     throw new Error('Firebase Service Account Key not found.');
   }
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+  const app = initializeApp({
+    credential: cert(serviceAccount),
   });
 
+  authInstance = getAuth(app);
+
   console.log('Firebase Admin SDK Initialized Successfully.');
+
   firebaseInitialized = true;
 
 } catch (error) {
@@ -45,6 +51,15 @@ try {
   console.warn(error.message);
   console.warn('============================================================\n');
 }
+
+const admin = {
+  auth: () => {
+    if (!authInstance) {
+      throw new Error('Firebase Admin SDK not initialized. Cannot access auth.');
+    }
+    return authInstance;
+  }
+};
 
 module.exports = {
   admin,
