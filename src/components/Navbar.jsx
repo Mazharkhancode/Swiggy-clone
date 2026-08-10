@@ -32,7 +32,7 @@ const formatToE164 = (phone) => {
 };
 
 export default function Navbar() {
-  const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode, loginWithFirebaseToken } = useAuthModal();
+  const { user, logout, login, signup, isOpen, openLogin, openSignup, close, mode, setMode, loginWithFirebaseToken, sendOTPCode, verifyOTPCode } = useAuthModal();
   const { cartCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,6 +58,7 @@ export default function Navbar() {
   // Firebase Phone Auth State
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [authMethod, setAuthMethod] = useState('twilio'); // 'twilio' | 'firebase'
 
   // Sync context mode with drawer mode
   useEffect(() => {
@@ -74,6 +75,7 @@ export default function Navbar() {
       setTempSignupData(null);
       setConfirmationResult(null);
       setLoading(false);
+      setAuthMethod('twilio');
     }
   }, [isOpen, mode]);
 
@@ -86,10 +88,6 @@ export default function Navbar() {
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!auth) {
-      setAuthError('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
-      return;
-    }
     const cleanedDigits = authPhone.replace(/\D/g, '');
     if (cleanedDigits.length < 10) {
       setAuthError('Please enter a valid phone number (at least 10 digits).');
@@ -100,16 +98,42 @@ export default function Navbar() {
     const formattedPhone = formatToE164(authPhone);
 
     try {
-      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible'
-      });
+      // 1. Try Twilio custom OTP flow
+      const result = await sendOTPCode(formattedPhone);
+      if (result.success) {
+        setAuthMethod('twilio');
+        setDrawerStep('otp');
+        setAuthOtp('');
+        setLoading(false);
+        return;
+      }
 
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
-      setConfirmationResult(confirmation);
-      setDrawerStep('otp');
-      setAuthOtp('');
+      // If credentials are not configured, fallback to Firebase
+      const isMissingConfig = result.message && (
+        result.message.includes('TWILIO_NOT_CONFIGURED') ||
+        result.message.toLowerCase().includes('credentials are not configured')
+      );
+
+      if (isMissingConfig) {
+        console.warn('Twilio not configured, falling back to Firebase Auth...');
+        if (!auth) {
+          throw new Error('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
+        }
+        const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible'
+        });
+
+        const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
+        setConfirmationResult(confirmation);
+        setAuthMethod('firebase');
+        setDrawerStep('otp');
+        setAuthOtp('');
+      } else {
+        // Propagate the actual Twilio/rate-limiting error to the frontend and do NOT fallback
+        throw new Error(result.message || 'Failed to send OTP via Twilio.');
+      }
     } catch (error) {
-      console.error('Error during signInWithPhoneNumber', error);
+      console.error('Error during phone submit:', error);
       setAuthError(error.message || 'Failed to send OTP. Please check your config or network.');
     } finally {
       setLoading(false);
@@ -119,10 +143,6 @@ export default function Navbar() {
   const handleDrawerSignupSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!auth) {
-      setAuthError('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
-      return;
-    }
     if (!signupName || !signupEmail || !authPhone || !signupPassword) {
       setAuthError('Please fill in all fields.');
       return;
@@ -149,16 +169,42 @@ export default function Navbar() {
     const formattedPhone = formatToE164(authPhone);
 
     try {
-      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible'
-      });
+      // 1. Try Twilio custom OTP flow
+      const result = await sendOTPCode(formattedPhone);
+      if (result.success) {
+        setAuthMethod('twilio');
+        setDrawerStep('otp');
+        setAuthOtp('');
+        setLoading(false);
+        return;
+      }
 
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
-      setConfirmationResult(confirmation);
-      setDrawerStep('otp');
-      setAuthOtp('');
+      // If credentials are not configured, fallback to Firebase
+      const isMissingConfig = result.message && (
+        result.message.includes('TWILIO_NOT_CONFIGURED') ||
+        result.message.toLowerCase().includes('credentials are not configured')
+      );
+
+      if (isMissingConfig) {
+        console.warn('Twilio not configured, falling back to Firebase Auth...');
+        if (!auth) {
+          throw new Error('Firebase Authentication is not initialized. Please verify that your environment variables are configured correctly.');
+        }
+        const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible'
+        });
+
+        const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
+        setConfirmationResult(confirmation);
+        setAuthMethod('firebase');
+        setDrawerStep('otp');
+        setAuthOtp('');
+      } else {
+        // Propagate actual error (trial limitation, API error, etc.) and do NOT fallback
+        throw new Error(result.message || 'Failed to send OTP via Twilio.');
+      }
     } catch (error) {
-      console.error('Error during signup signInWithPhoneNumber', error);
+      console.error('Error during signup phone submit:', error);
       setAuthError(error.message || 'Failed to send OTP. Please check your config or network.');
     } finally {
       setLoading(false);
@@ -176,27 +222,48 @@ export default function Navbar() {
     setLoading(true);
 
     try {
-      if (!confirmationResult) {
-        throw new Error('No active OTP session found. Please request a new code.');
-      }
+      if (authMethod === 'twilio') {
+        let result;
+        const formattedPhone = formatToE164(authPhone);
+        if (drawerMode === 'signup' && tempSignupData) {
+          result = await verifyOTPCode(formattedPhone, authOtp, {
+            name: tempSignupData.name,
+            email: tempSignupData.email,
+            password: tempSignupData.password
+          });
+        } else {
+          result = await verifyOTPCode(formattedPhone, authOtp);
+        }
 
-      const userCredential = await confirmationResult.confirm(authOtp);
-      const firebaseToken = await userCredential.user.getIdToken();
-
-      let result;
-      if (drawerMode === 'signup' && tempSignupData) {
-        result = await loginWithFirebaseToken(firebaseToken, {
-          name: tempSignupData.name,
-          email: tempSignupData.email
-        });
+        if (result.success) {
+          closeLoginDrawer();
+        } else {
+          setAuthError(result.message || 'Verification failed.');
+        }
       } else {
-        result = await loginWithFirebaseToken(firebaseToken);
-      }
+        // Firebase Flow
+        if (!confirmationResult) {
+          throw new Error('No active OTP session found. Please request a new code.');
+        }
 
-      if (result.success) {
-        closeLoginDrawer();
-      } else {
-        setAuthError(result.message || 'Verification failed.');
+        const userCredential = await confirmationResult.confirm(authOtp);
+        const firebaseToken = await userCredential.user.getIdToken();
+
+        let result;
+        if (drawerMode === 'signup' && tempSignupData) {
+          result = await loginWithFirebaseToken(firebaseToken, {
+            name: tempSignupData.name,
+            email: tempSignupData.email
+          });
+        } else {
+          result = await loginWithFirebaseToken(firebaseToken);
+        }
+
+        if (result.success) {
+          closeLoginDrawer();
+        } else {
+          setAuthError(result.message || 'Verification failed.');
+        }
       }
     } catch (error) {
       console.error('Error verifying OTP code', error);

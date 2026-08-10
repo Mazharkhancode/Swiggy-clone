@@ -226,9 +226,9 @@ export function AuthModalProvider({ children }) {
     }
   };
 
-  const verifyOTPCode = async (phone, otp) => {
+  const verifyOTPCode = async (phone, otp, extraData = {}) => {
     try {
-      const response = await api.post('/auth/verify-otp', { phone, otp });
+      const response = await api.post('/auth/verify-otp', { phone, otp, ...extraData });
       const data = response.data;
       setUser(data);
       localStorage.setItem('swiggy_user', JSON.stringify(data));
