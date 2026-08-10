@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://swiggy-clone-x5a7.onrender.com/api' : 'http://localhost:5000/api'),
+  baseURL: 'https://swiggy-clone-x5a7.onrender.com/api',
   headers: {
     'Content-Type': 'application/json'
   }

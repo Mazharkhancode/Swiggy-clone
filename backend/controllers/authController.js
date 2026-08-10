@@ -223,7 +223,7 @@ const sendOTP = async (req, res) => {
       }
 
       await client.messages.create({
-        body: 'sms_2fa', // Use predefined template to bypass trial account restrictions
+        body: `Your Swiggy Clone verification code is ${otpCode}. It is valid for 5 minutes.`,
         to: phone,
         from: fromNumber
       });
